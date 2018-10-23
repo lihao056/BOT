@@ -4,9 +4,9 @@ from __future__ import division
 
 import os
 from PIL import Image
-import numpy as np
+import cv2
 import os.path as osp
-import io
+
 
 import torch
 from torch.utils.data import Dataset
@@ -38,13 +38,14 @@ class ImageDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, label = self.dataset[index]
+        img_path , position1, position2, gender, staff, customer, stand, sit, play_with_phone = self.dataset[index]
         img = read_image(img_path)
-
+        cropimg = img.crop((position1[0], position2[0], position1[1],position2[1]))
+        # cv2.imshow(img)
         if self.transform is not None:
-            img = self.transform(img)
+            cropimg = self.transform(cropimg)
 
-        return img, label
+        return cropimg, gender, staff, customer, stand, sit, play_with_phone
 
 
 class ImageDataset_demo(Dataset):

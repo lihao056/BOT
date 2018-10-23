@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import torchvision
 
 
-__all__ = ['ResNet50', 'ResNet101', 'ResNet50M', 'ResNet50_chart', 'ResNet18_chart']
+__all__ = ['ResNet50', 'ResNet101', 'ResNet50M', 'ResNet50_bot']
 
 
 class ResNet50(nn.Module):
@@ -115,13 +115,20 @@ class ResNet50M(nn.Module):
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
 
-class ResNet50_chart(nn.Module):
-    def __init__(self, num_classes, loss={'xent'}, **kwargs):
-        super(ResNet50_chart, self).__init__()
+class ResNet50_bot(nn.Module):
+    def __init__(self, loss={'xent'}, **kwargs):
+        super(ResNet50_bot, self).__init__()
         self.loss = loss
         resnet50 = torchvision.models.resnet50(pretrained=True)
         self.base = nn.Sequential(*list(resnet50.children())[:-2])
-        self.classifier = nn.Linear(2048, num_classes)
+
+        self.gender_classifier = nn.Linear(2048, 2)
+        self.staff_classifier = nn.Linear(2048, 2)
+        self.customer_classifier = nn.Linear(2048, 2)
+        self.stand_classifier = nn.Linear(2048, 2)
+        self.sit_classifier = nn.Linear(2048, 2)
+        self.play_with_phone_classifier = nn.Linear(2048, 2)
+
         self.feat_dim = 2048
 
     def forward(self, x):
@@ -129,24 +136,13 @@ class ResNet50_chart(nn.Module):
         x = F.avg_pool2d(x, x.size()[2:])
         f = x.view(x.size(0), -1)
 
-        y = self.classifier(f)
-        return y
+        gender = self.gender_classifier(f)
+        staff = self.staff_classifier(f)
+        customer = self.customer_classifier(f)
+        stand = self.stand_classifier(f)
+        sit = self.sit_classifier(f)
+        play_with_phone = self.play_with_phone_classifier(f)
+
+        return gender, staff, customer, stand, sit, play_with_phone
 
 
-
-class ResNet18_chart(nn.Module):
-	def __init__(self, num_classes=10, loss={'xent'}, **kwargs):
-		super(ResNet18_chart, self).__init__()
-		self.loss = loss
-		resnet18 = torchvision.models.resnet18(pretrained=True)
-		self.base = nn.Sequential(*list(resnet18.children())[:-2])
-		self.classifier = nn.Linear(512, num_classes)
-		self.feat_dim = 512  # feature dimension
-
-	def forward(self, x):
-		x = self.base(x)
-		x = F.avg_pool2d(x, x.size()[2:])
-		f = x.view(x.size(0), -1)
-
-		y = self.classifier(f)
-		return y

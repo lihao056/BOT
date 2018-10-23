@@ -2,11 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from .chart import Chart
+from .bot import Bot
 
 
 __imgreid_factory = {
-    'chart': Chart
+    'bot': Bot
 }
 
 
