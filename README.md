@@ -1,8 +1,15 @@
 # chart_test
-图表模型预测
+BOT比赛程序
 
-本程序参照项目https://github.com/KaiyangZhou/deep-person-reid进行修改
+数据集处理
 
-有兴趣可以去该项目下详细研究
+mkdir data
 
+cd data
+
+mkdir test
+
+mkdir train
+
+即可
 
