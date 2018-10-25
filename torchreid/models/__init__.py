@@ -18,6 +18,7 @@ from .inceptionresnetv2 import *
 __model_factory = {
     'resnet50': ResNet50,
     'resnet50_bot': ResNet50_bot,
+    'ResNet50_BOT_MultiTask': ResNet50_BOT_MultiTask,
     'resnet101': ResNet101,
     'seresnet50': SEResNet50,
     'seresnet101': SEResNet101,

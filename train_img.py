@@ -34,9 +34,9 @@ parser.add_argument('-d', '--dataset', type=str, default='bot',
                     choices=data_manager.get_names())
 parser.add_argument('-j', '--workers', default=4, type=int,
                     help="number of data loading workers (default: 4)")
-parser.add_argument('--height', type=int, default=256,
+parser.add_argument('--height', type=int, default=224,
                     help="height of an image (default: 256)")
-parser.add_argument('--width', type=int, default=128,
+parser.add_argument('--width', type=int, default=224,
                     help="width of an image (default: 128)")
 parser.add_argument('--split-id', type=int, default=0,
                     help="split index (0-based)")
@@ -52,32 +52,22 @@ parser.add_argument('--train-batch', default=64, type=int,
 parser.add_argument('--test-batch', default=64, type=int,
                     help="test batch size")
 # 参数调节
-parser.add_argument('--lr', '--learning-rate', default=0.0003, type=float,
+parser.add_argument('--lr', '--learning-rate', default=0.001, type=float,
                     help="initial learning rate")
 parser.add_argument('--stepsize', default=[20, 40], nargs='+', type=int,
                     help="stepsize to decay learning rate")
 parser.add_argument('--gamma', default=0.1, type=float,
                     help="learning rate decay")
-parser.add_argument('--weight-decay', default=5e-04, type=float,
+parser.add_argument('--weight-decay', default=1e-6, type=float,
                     help="weight decay (default: 5e-04)")
-parser.add_argument('--fixbase-epoch', default=0, type=int,
-                    help="epochs to fix base network (only train classifier, default: 0)")
-parser.add_argument('--fixbase-lr', default=0.0003, type=float,
-                    help="learning rate (when base network is frozen)")
-parser.add_argument('--freeze-bn', action='store_true',
-                    help="freeze running statistics in BatchNorm layers during training (default: False)")
-parser.add_argument('--label-smooth', action='store_true',
-                    help="use label smoothing regularizer in cross entropy loss")
+
 # Architecture
-parser.add_argument('-a', '--arch', type=str, default='resnet50_bot', choices=models.get_names())
+parser.add_argument('-a', '--arch', type=str, default='ResNet50_BOT_MultiTask', choices=models.get_names())
 # Miscs
 parser.add_argument('--print-freq', type=int, default=10,
                     help="print frequency")
 parser.add_argument('--seed', type=int, default=1,
                     help="manual seed")
-parser.add_argument('--resume', type=str, default='', metavar='PATH')
-parser.add_argument('--load-weights', type=str, default='',
-                    help="load pretrained weights but ignores layers that don't match in size")
 # 评估模式参数
 parser.add_argument('--evaluate', action='store_true',
                     help="evaluation only")
@@ -93,8 +83,6 @@ parser.add_argument('--use-cpu', action='store_true',
                     help="use cpu")
 parser.add_argument('--gpu-devices', default='0', type=str,
                     help='gpu device ids for CUDA_VISIBLE_DEVICES')
-parser.add_argument('--use-avai-gpus', action='store_true',
-                    help="use available gpus instead of specified devices (this is useful when using managed clusters)")
 parser.add_argument('--vis-ranked-res', action='store_true',
                     help="visualize ranked results, only available in evaluation mode (default: False)")
 
@@ -104,9 +92,8 @@ args = parser.parse_args()
 
 
 def main():
-    best_rank1 = 0
     torch.manual_seed(args.seed)
-    if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
     use_gpu = torch.cuda.is_available()
     if args.use_cpu: use_gpu = False
 
@@ -169,31 +156,6 @@ def main():
     optimizer = init_optim(args.optim, model.parameters(), args.lr, args.weight_decay)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
 
-    if args.fixbase_epoch > 0:
-        if hasattr(model, 'classifier') and isinstance(model.classifier, nn.Module):
-            optimizer_tmp = init_optim(args.optim, model.classifier.parameters(), args.fixbase_lr, args.weight_decay)
-        else:
-            print("Warn: model has no attribute 'classifier' and fixbase_epoch is reset to 0")
-            args.fixbase_epoch = 0
-
-    if args.load_weights and check_isfile(args.load_weights):
-        # load pretrained weights but ignore layers that don't match in size
-        checkpoint = torch.load(args.load_weights)
-        pretrain_dict = checkpoint['state_dict']
-        model_dict = model.state_dict()
-        pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in model_dict and model_dict[k].size() == v.size()}
-        model_dict.update(pretrain_dict)
-        model.load_state_dict(model_dict)
-        print("Loaded pretrained weights from '{}'".format(args.load_weights))
-
-    if args.resume and check_isfile(args.resume):
-        checkpoint = torch.load(args.resume)
-        model.load_state_dict(checkpoint['state_dict'])
-        args.start_epoch = checkpoint['epoch'] + 1
-        best_rank1 = checkpoint['rank1']
-        print("Loaded checkpoint from '{}'".format(args.resume))
-        print("- start_epoch: {}\n- rank1: {}".format(args.start_epoch, best_rank1))
-
     if use_gpu:
         model = nn.DataParallel(model).cuda()
 
@@ -212,13 +174,13 @@ def main():
         train_time += round(time.time() - start_train_time)
         
         scheduler.step()
-        
+
         if (epoch + 1) > args.start_eval and args.eval_step > 0 and (epoch + 1) % args.eval_step == 0 or (epoch + 1) == args.max_epoch:
             print("==> Test")
             gender_accurary, staff_accurary, customer_accurary, stand_accurary, sit_accurary, phone_accurary = test(model, testloader, use_gpu)
             Score = (gender_accurary + staff_accurary + customer_accurary + stand_accurary + sit_accurary + phone_accurary) * 100
             is_best = Score > best_score
-            
+
             if is_best:
                 best_score = Score
                 best_gender_acc = gender_accurary
@@ -228,12 +190,12 @@ def main():
                 best_sit_acc = sit_accurary
                 best_phone_acc = phone_accurary
                 best_epoch = epoch + 1
-            
+
             if use_gpu:
                 state_dict = model.module.state_dict()
             else:
                 state_dict = model.state_dict()
-            
+
             save_checkpoint({
                 'state_dict': state_dict,
                 'rank1': Score,
@@ -259,9 +221,6 @@ def train(epoch, model, gender_criterion_xent, staff_criterion_xent, customer_cr
 
     model.train()
 
-    if freeze_bn or args.freeze_bn:
-        model.apply(set_bn_to_eval)
-
     end = time.time()
     for batch_idx, (imgs, gender_labels, staff_labels, customer_labels, stand_labels, sit_labels,\
                     play_with_phone_labels) in enumerate(trainloader):
@@ -273,6 +232,7 @@ def train(epoch, model, gender_criterion_xent, staff_criterion_xent, customer_cr
             customer_labels.cuda(), stand_labels.cuda(), sit_labels.cuda(), play_with_phone_labels.cuda()
         
         gender_outputs, staff_outputs, customer_outputs, stand_outputs, sit_outputs, play_with_phone_outputs = model(imgs)
+
         gender_loss = gender_criterion_xent(gender_outputs, gender_labels)
         staff_loss = staff_criterion_xent(staff_outputs, staff_labels)
         customer_loss = customer_criterion_xent(customer_outputs, customer_labels)
@@ -304,7 +264,7 @@ def train(epoch, model, gender_criterion_xent, staff_criterion_xent, customer_cr
         end = time.time()
 
 
-def test(model, testloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
+def test(model, testloader, use_gpu):
     batch_time = AverageMeter()
     gender_correct = 0
     staff_correct = 0

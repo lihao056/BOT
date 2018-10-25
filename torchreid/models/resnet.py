@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import torchvision
 
 
-__all__ = ['ResNet50', 'ResNet101', 'ResNet50M', 'ResNet50_bot']
+__all__ = ['ResNet50', 'ResNet101', 'ResNet50M', 'ResNet50_bot', 'ResNet50_BOT_MultiTask']
 
 
 class ResNet50(nn.Module):
@@ -144,5 +144,35 @@ class ResNet50_bot(nn.Module):
         play_with_phone = self.play_with_phone_classifier(f)
 
         return gender, staff, customer, stand, sit, play_with_phone
+
+class ResNet50_BOT_MultiTask(nn.Module):
+	def __init__(self, classes = 2 , loss={'xent'}, **kwargs):
+		super(ResNet50_BOT_MultiTask, self).__init__()
+		self.loss = loss
+		resnet50 = torchvision.models.resnet50(pretrained=True)
+		self.base = nn.Sequential(*list(resnet50.children())[:-2])  # 去掉最后两层，fc和pooling
+
+		self.gender_classifier = nn.Linear(2048, classes)
+		self.staff_classifier = nn.Linear(2048, classes)
+		self.customer_classifier = nn.Linear(2048, classes)
+		self.stand_classifier = nn.Linear(2048, classes)
+		self.sit_classifier = nn.Linear(2048, classes)
+		self.phone_classifier = nn.Linear(2048, classes)
+
+		self.feat_dim = 2048  # feature dimension
+
+	def forward(self, x):
+		x = self.base(x)
+		x = F.avg_pool2d(x, x.size()[2:])
+		f = x.view(x.size(0), -1)
+		# print('f.shape',f.shape)
+		gender = self.gender_classifier(f)
+		staff = self.staff_classifier(f)
+		customer = self.customer_classifier(f)
+		stand = self.stand_classifier(f)
+		sit = self.sit_classifier(f)
+		phone = self.phone_classifier(f)
+		return gender, staff, customer, stand, sit, phone
+
 
 
