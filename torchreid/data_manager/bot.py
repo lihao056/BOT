@@ -6,6 +6,7 @@ from __future__ import print_function
 import glob
 import json
 import os.path as osp
+import os
 
 
 
@@ -26,10 +27,12 @@ class Bot(object):
         self.test_dir = osp.join(self.dataset_dir, 'test')
 
         self._check_before_run()
-        train, num_train_imgs = self._process_dir(self.train_dir, relabel=True)
-        test, num_test_imgs = self._process_dir(self.test_dir, relabel=False)
+        train = self._process_dir(self.train_dir, relabel=True)
+        test = self._process_dir(self.test_dir, relabel=False)
 
-        num_total_imgs = num_train_imgs + num_test_imgs
+        num_train_imgs = len(train)
+        num_test_imgs = len(test)
+        num_total_imgs = num_test_imgs + num_train_imgs
 
         if verbose:
             print("=> Market1501 loaded")
@@ -60,31 +63,27 @@ class Bot(object):
 
 
     def _process_dir(self, dir_path, relabel=False):
-        img_paths = []
+        dateset = []
+        images_dir = os.path.join(dir_path, 'image')
+        labels_dir = os.path.join(dir_path, 'label')
 
-        for item in glob.glob(osp.join(dir_path,'image')):
-            img_paths.append(glob.glob(osp.join(item,'*.jpg')))
+        for image_dir in os.listdir(images_dir):
+            label_dir = os.path.join(labels_dir, image_dir.split(".")[0] + ".json")
+            image_dir = os.path.join(images_dir, image_dir)
 
-        dataset = []
-        i = 0
-        for item in glob.glob(osp.join(dir_path, 'label','*')):
-            img = img_paths[0][i]
-            with open(item, 'r') as load_f:
+            with open(label_dir, 'r') as load_f:
                 load_dict = json.load(load_f)
-                object = load_dict["annotation"][0]["object"]
-                for o in object:
-                    minx = o['minx']
-                    miny = o['miny']
-                    maxx = o['maxx']
-                    maxy = o['maxy']
-                    position1 = [minx,miny]
-                    position2 = [maxx,maxy]
-                    gender = o['gender']
-                    staff = o['staff']
-                    customer = o['customer']
-                    stand = o['stand']
-                    sit = o['sit']
-                    play_with_phone = o['play_with_phone']
-                    dataset.append((img, position1, position2, gender, staff, customer, stand, sit, play_with_phone))
-        num_imgs = len(img_paths[0])
-        return dataset, num_imgs
+                for person in load_dict['annotation'][0]['object']:
+                    position0 = (person['minx'], person['miny'])
+                    position1 = ((person['maxx'], person['maxy']))
+
+                    dateset.append((image_dir,
+                                    position0, position1,
+                                    person['gender'],
+                                    person['staff'],
+                                    person['customer'],
+                                    person['stand'],
+                                    person['sit'],
+                                    person['play_with_phone']
+                                    ))
+        return dateset
